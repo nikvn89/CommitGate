@@ -229,3 +229,104 @@ It does **not** prove:
 - a TESTABLE commitment is fair or legally valid;
 - any commitment was actually performed;
 - the final Vercel deployment works before it is separately tested.
+
+# Final Vercel runtime evidence
+
+Live dApp:
+
+```text
+https://commit-gate.vercel.app/
+```
+
+GitHub:
+
+```text
+https://github.com/nikvn89/CommitGate
+```
+
+Contract:
+
+```text
+0xe8999d51e91B8b7Ee82CeF530B1620236B84828F
+```
+
+## V1 — Create agreement on Vercel
+
+Observed agreement:
+
+```text
+name = Vercel SLA
+state = OPEN
+TESTABLE = 0
+SUBMITTED = 0
+BOUND = NO
+```
+
+**Status: PASS — VERCEL**
+
+## V2 — Negative semantic branch
+
+Observed:
+
+```text
+CONFIRMED NO FAILURE STATE
+TESTABLE = 0
+SUBMITTED = 1
+BOUND = NO
+```
+
+The bind gate remained closed.
+
+**Status: PASS — VERCEL**
+
+## V3 — Positive semantic branch
+
+Observed:
+
+```text
+CONFIRMED TESTABLE
+TESTABLE = 1
+SUBMITTED = 2
+BOUND = NO
+```
+
+The bind button became available.
+
+**Status: PASS — VERCEL**
+
+## V4 — Deterministic bind
+
+Observed:
+
+```text
+CONFIRMED Agreement BOUND
+state = BOUND
+TESTABLE = 1
+SUBMITTED = 2
+BOUND = YES
+```
+
+The action button changed to:
+
+```text
+Agreement is BOUND
+```
+
+**Status: PASS — VERCEL**
+
+## Final project result
+
+```text
+Local frontend core flow: PASS
+RLP regression fix: PASS
+Vercel core flow: PASS
+```
+
+Not claimed as PASS without separate runtime evidence:
+
+```text
+provider-side Disconnect permission revoke
+Wallet C unauthorized submit/bind regression
+additional wrong-chain rejection edge cases
+```
+

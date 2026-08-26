@@ -275,3 +275,65 @@ does not support automatic permission revocation, CommitGate still disconnects l
 and tells the user to remove the site from the wallet's Connected sites list for a full
 provider-side revoke.
 
+## Final project links
+
+**Live dApp**
+
+https://commit-gate.vercel.app/
+
+**GitHub**
+
+https://github.com/nikvn89/CommitGate
+
+**GenLayer StudioNet contract**
+
+https://explorer-studio.genlayer.com/address/0xe8999d51e91B8b7Ee82CeF530B1620236B84828F
+
+Contract address:
+
+```text
+0xe8999d51e91B8b7Ee82CeF530B1620236B84828F
+```
+
+## Final Vercel runtime result
+
+The final Vercel deployment was tested end-to-end against the StudioNet contract.
+
+Observed live flow:
+
+```text
+Create "Vercel SLA"
+-> OPEN
+-> TESTABLE 0
+-> SUBMITTED 0
+-> BOUND NO
+
+Vague commitment
+-> COMMITMENT_NO_FAILURE_STATE
+-> TESTABLE 0
+-> SUBMITTED 1
+-> BOUND NO
+
+Positive commitment
+-> COMMITMENT_TESTABLE
+-> TESTABLE 1
+-> SUBMITTED 2
+-> BOUND NO
+
+Bind agreement
+-> BOUND
+-> TESTABLE 1
+-> SUBMITTED 2
+-> BOUND YES
+```
+
+The final live UI also showed StudioNet chain `61999`, the correct project contract,
+wallet-scoped creator/promisee state, append-only commitment history, and the final
+`Agreement is BOUND` state.
+
+**Final core Vercel flow status: PASS**
+
+The separate provider-side permission revoke behind the Disconnect button is implemented,
+but is not claimed as a runtime PASS here because a completed revoke was not separately
+captured as evidence.
+
