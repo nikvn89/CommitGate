@@ -182,6 +182,29 @@ The same positive 160-character commitment then completed successfully through t
 
 **Status: PASS — REGRESSION FIX VERIFIED LOCALLY**
 
+## Deterministic ID parity regression test
+
+Command:
+
+```text
+npm test
+```
+
+Result from the packaged source on 2026-09-19:
+
+```text
+PASS: 8 parity cases, 15/15 production assertions green.
+MUTATION PROOF: legacy trim()/length is red in 6/8 cases (12/15 ID assertions).
+ON-CHAIN VECTOR: 9b6fe8ca…364050 -> 857a605c…bc30 PASS.
+```
+
+Coverage includes ASCII, emoji outside the BMP, extended Han outside the BMP,
+`U+001F`, `U+0085`, `U+FEFF`, `U+001C`/`U+001E`, and the fixed real-data vector.
+
+The extended unsigned `eth_estimateGas` probe for 200/300/400/600-character
+`submit_commitment` inputs is included in `tools/probe-studio.mjs`. Its runtime table is
+not recorded here because that network probe still must be run and captured by the user.
+
 ---
 
 ## Current project checklist
@@ -329,4 +352,3 @@ provider-side Disconnect permission revoke
 Wallet C unauthorized submit/bind regression
 additional wrong-chain rejection edge cases
 ```
-

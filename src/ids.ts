@@ -1,4 +1,5 @@
 import { keccak256, toBytes } from 'viem'
+import { pyLen, pyStrip } from './pystrip'
 
 /**
  * Local, dependency-free reimplementation of the contract's content-addressed
@@ -14,8 +15,8 @@ import { keccak256, toBytes } from 'viem'
  *     Keccak256("COMMITMENT_TESTABILITY:COMMITMENT:V1|" + agreement_id
  *               + "|" + len(text) + "|" + text)
  *
- * Both contract helpers hash the CLEANED value (name/text are .strip()ed and
- * the creator address is lowercased), so callers must pass trimmed input.
+ * Both contract helpers hash the CLEANED value (name/text use Python strip()
+ * and the creator address is lowercased). This module performs that cleaning.
  *
  * Verified against real on-chain data: agreement
  * 9b6fe8ca…364050 + the vague demo text reproduces the observed commitment id
@@ -46,17 +47,17 @@ export function isIdLike(value: string): boolean {
 
 /** Mirrors _clean_name. Throws the same class of message the contract would. */
 export function cleanName(name: string): string {
-  const cleaned = name.trim()
-  if (cleaned.length === 0) throw new Error('Agreement name cannot be empty')
-  if (cleaned.length > MAX_NAME_LENGTH) throw new Error('Agreement name is too long')
+  const cleaned = pyStrip(name)
+  if (pyLen(cleaned) === 0) throw new Error('Agreement name cannot be empty')
+  if (pyLen(cleaned) > MAX_NAME_LENGTH) throw new Error('Agreement name is too long')
   return cleaned
 }
 
 /** Mirrors _clean_commitment_text, including the pre-nondet reject rules. */
 export function cleanCommitmentText(text: string): string {
-  const cleaned = text.trim()
-  if (cleaned.length === 0) throw new Error('Commitment text cannot be empty')
-  if (cleaned.length > MAX_TEXT_LENGTH) throw new Error('Commitment text is too long')
+  const cleaned = pyStrip(text)
+  if (pyLen(cleaned) === 0) throw new Error('Commitment text cannot be empty')
+  if (pyLen(cleaned) > MAX_TEXT_LENGTH) throw new Error('Commitment text is too long')
   const upper = cleaned.toUpperCase()
   if (RESERVED_FENCES.some((fence) => upper.includes(fence))) {
     throw new Error('Commitment text contains a reserved prompt fence')
@@ -70,12 +71,12 @@ export function cleanCommitmentText(text: string): string {
 export function agreementIdOf(creator: string, name: string): string {
   if (!isAddressLike(creator)) throw new Error('Invalid creator address')
   const clean = cleanName(name)
-  return hashUtf8(`${AGREEMENT_DOMAIN}|${creator.trim().toLowerCase()}|${clean.length}|${clean}`)
+  return hashUtf8(`${AGREEMENT_DOMAIN}|${creator.trim().toLowerCase()}|${pyLen(clean)}|${clean}`)
 }
 
 export function commitmentIdOf(agreementId: string, text: string): string {
   const id = agreementId.trim().toLowerCase()
   if (!isIdLike(id)) throw new Error('Invalid agreement id')
   const clean = cleanCommitmentText(text)
-  return hashUtf8(`${COMMITMENT_DOMAIN}|${id}|${clean.length}|${clean}`)
+  return hashUtf8(`${COMMITMENT_DOMAIN}|${id}|${pyLen(clean)}|${clean}`)
 }

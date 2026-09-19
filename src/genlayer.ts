@@ -25,6 +25,57 @@ const readChain = {
 
 const readClient = createClient({ chain: readChain } as any)
 
+function nonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const clean = value.trim()
+  return clean || undefined
+}
+
+function rollbackReasonFromLeader(leader: any): string | undefined {
+  const result = String(
+    leader?.execution_result ?? leader?.executionResult ?? leader?.result?.execution_result ?? '',
+  ).toUpperCase()
+  const status = String(leader?.status ?? leader?.result?.status ?? '').toUpperCase()
+  if (
+    result !== 'ERROR' && result !== 'FINISHED_WITH_ERROR' &&
+    status !== 'ERROR' && status !== 'FINISHED_WITH_ERROR'
+  ) return undefined
+
+  const candidates = [
+    leader?.error,
+    leader?.message,
+    leader?.return_data,
+    leader?.returnData,
+    leader?.result?.error,
+    leader?.result?.message,
+    leader?.result?.payload,
+    leader?.result?.return_data,
+    leader?.result?.returnData,
+  ]
+  for (const candidate of candidates) {
+    const reason = nonEmptyString(candidate)
+    if (reason) return reason
+  }
+  return 'Contract execution rolled back.'
+}
+
+// Only called AFTER state matching has timed out. State matching stays the
+// primary confirmation; this one-shot read distinguishes a genuine consensus
+// rollback from a slow transaction and exposes the exact reason for evidence.
+export async function leaderRollbackReason(hash: string): Promise<string | undefined> {
+  try {
+    const tx: any = await readClient.getTransaction({ hash } as any)
+    const consensus = tx?.consensus_data ?? tx?.consensusData
+    let leader = consensus?.leader_receipt ?? consensus?.leaderReceipt
+    if (Array.isArray(leader)) {
+      leader = leader.find((receipt: any) => String(receipt?.mode ?? '').toUpperCase() === 'LEADER') ?? leader[0]
+    }
+    return rollbackReasonFromLeader(leader)
+  } catch {
+    return undefined
+  }
+}
+
 export function normalizeAddress(address: string): Address {
   return getAddress(address) as Address
 }

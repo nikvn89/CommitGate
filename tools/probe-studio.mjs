@@ -10,6 +10,7 @@
  *   1. gen_call (READ)  compute_commitment_id  — vague text, then positive text
  *   2. gen_call (READ)  get_agreement          — control, tiny payload
  *   3. eth_estimateGas  addTransaction(...)    — the exact WRITE calldata, unsigned
+ *   4. eth_estimateGas  submit_commitment       — 200/300/400/600-char boundary table
  *
  * Read the output like this:
  *   - vague READ ok + positive READ fails  -> the failure is the gen_call READ path
@@ -53,11 +54,35 @@ const byteLen = (hex) => (hex.length - 2) / 2
 async function rpc(method, params) {
   const res = await fetch(RPC, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'accept': 'application/json, text/plain, */*',
+      'origin': 'https://studio.genlayer.com',
+      'referer': 'https://studio.genlayer.com/',
+      'user-agent': 'Mozilla/5.0 CommitGate-StudioNet-Probe/1.0',
+    },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   })
   const json = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }))
   return json
+}
+
+async function estimateSubmit(text) {
+  const payload = payloadFor('submit_commitment', [AGREEMENT_ID, text])
+  const data = encodeFunctionData({
+    abi: ADD_TRANSACTION_ABI_V5, functionName: 'addTransaction',
+    args: [FROM, CONTRACT, 5n, 3n, payload],
+  })
+  const json = await rpc('eth_estimateGas', [{ from: FROM, to: CONSENSUS, data, value: '0x0' }])
+  return { payload, json }
+}
+
+function resultCell(json) {
+  if (json?.error) {
+    const detail = json.error.message ?? JSON.stringify(json.error)
+    return `FAIL ${json.error.code ?? ''} ${detail}`.trim()
+  }
+  return `OK ${String(json?.result ?? '')}`.trim()
 }
 
 function report(label, payloadHex, json) {
@@ -92,14 +117,25 @@ for (const [label, text] of [['vague', VAGUE], ['positive', POSITIVE]]) {
 
 // 3. the write calldata, unsigned - eth_estimateGas executes the same decode path
 for (const [label, text] of [['vague', VAGUE], ['positive', POSITIVE]]) {
-  const p = payloadFor('submit_commitment', [AGREEMENT_ID, text])
-  const data = encodeFunctionData({
-    abi: ADD_TRANSACTION_ABI_V5, functionName: 'addTransaction',
-    args: [FROM, CONTRACT, 5n, 3n, p],
-  })
-  const json = await rpc('eth_estimateGas', [{ from: FROM, to: CONSENSUS, data, value: '0x0' }])
-  report(`WRITE submit_commitment via estimateGas (${label}, ${text.length} chars)`, p, json)
+  const { payload, json } = await estimateSubmit(text)
+  report(`WRITE submit_commitment via estimateGas (${label}, ${text.length} chars)`, payload, json)
 }
+
+// 4. Extended unsigned write boundary probe requested for the submission audit.
+// Exact payload byte lengths are measured from serialized bytes, never inferred.
+const boundaryRows = []
+for (const chars of [200, 300, 400, 600]) {
+  const text = 'x'.repeat(chars)
+  const { payload, json } = await estimateSubmit(text)
+  boundaryRows.push({
+    textChars: chars,
+    payloadBytes: byteLen(payload),
+    result: resultCell(json),
+  })
+}
+
+console.log('\nWRITE submit_commitment extended estimateGas boundary')
+console.table(boundaryRows)
 
 console.log('\nThreshold: submit_commitment crosses 255 bytes at 150 chars of text;')
 console.log('compute_commitment_id crosses at 146 chars. The vague demo text is 84,')

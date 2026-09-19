@@ -110,6 +110,7 @@ The dApp follows the established StudioNet frontend rules:
 - after a tx hash exists, the app never tells the user the write definitely failed merely because confirmation timed out;
 - there is no browser `waitForTransactionReceipt()` loop;
 - state confirmation uses bounded, low-frequency accepted-state reads;
+- only after state confirmation times out, one leader-receipt diagnostic read may expose an exact rollback reason and transaction hash;
 - write buttons are locked during active submission flow;
 - plain provider objects are normalized instead of displaying `[object Object]`.
 
@@ -172,6 +173,8 @@ CommitGate/
 │  ├─ errors.ts
 │  ├─ genlayer.ts
 │  ├─ main.tsx
+│  ├─ ids.ts
+│  ├─ pystrip.ts
 │  ├─ styles.css
 │  ├─ types.ts
 │  └─ vite-env.d.ts
@@ -180,7 +183,12 @@ CommitGate/
 ├─ index.html
 ├─ LICENSE
 ├─ package.json
+├─ package-lock.json
+├─ LOCKED_SPEC.md
 ├─ README.md
+├─ RUNTIME_EVIDENCE.md
+├─ SECURITY.md
+├─ SOURCE_SHA256.txt
 ├─ TESTING.md
 ├─ SUBMISSION_NOTE.md
 ├─ tsconfig.app.json
@@ -202,6 +210,14 @@ Production build:
 ```bash
 npm run build
 ```
+
+Deterministic ID parity test:
+
+```bash
+npm test
+```
+
+The test executes the production `src/ids.ts` implementation, covers ordinary text, astral Unicode, Python-only whitespace, JS-only `U+FEFF`, and the recorded on-chain vector. It also runs a legacy `.trim()` / UTF-16 `.length` mutation check so the pre-fix behavior cannot pass unnoticed.
 
 On Windows you can also double-click `LOCAL_TEST.cmd`; it installs dependencies, runs the production build, and starts the Vite dev server only if the build succeeds.
 
@@ -336,4 +352,3 @@ wallet-scoped creator/promisee state, append-only commitment history, and the fi
 The separate provider-side permission revoke behind the Disconnect button is implemented,
 but is not claimed as a runtime PASS here because a completed revoke was not separately
 captured as evidence.
-

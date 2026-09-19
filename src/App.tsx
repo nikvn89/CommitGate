@@ -18,11 +18,13 @@ import {
   getChainId,
   getCommitment,
   getConfig,
+  leaderRollbackReason,
   submitCommitment,
   subscribeWalletEvents,
   waitForStateChange,
 } from './genlayer'
 import { step } from './errors'
+import { pyLen, pyStrip } from './pystrip'
 import type { Address, AgreementState, AttemptItem, CommitmentState, ContractConfig, TxState } from './types'
 
 const DEMO_VAGUE = 'The operator will respond to incidents in the manner warranted by operational needs.'
@@ -270,12 +272,12 @@ function App() {
 
   const create = async () => {
     if (!account) return setNotice({ kind: 'warning', title: 'Connect MetaMask', message: 'A creator wallet is required.' })
-    const cleanName = name.trim()
+    const cleanName = pyStrip(name)
     const cleanPromisee = promisee.trim()
     if (!cleanName) return setNotice({ kind: 'warning', title: 'Name required', message: 'Enter an agreement name.' })
     if (!/^0x[a-fA-F0-9]{40}$/.test(cleanPromisee)) return setNotice({ kind: 'warning', title: 'Invalid promisee', message: 'Enter a valid 0x address different from the creator.' })
     if (sameAddress(account, cleanPromisee)) return setNotice({ kind: 'warning', title: 'Promisee must differ', message: 'Use any other valid address. The promisee does not need to sign the demo.' })
-    if (config && cleanName.length > config.max_name_length) return setNotice({ kind: 'warning', title: 'Name too long', message: `Maximum ${config.max_name_length} characters.` })
+    if (config && pyLen(cleanName) > config.max_name_length) return setNotice({ kind: 'warning', title: 'Name too long', message: `Maximum ${config.max_name_length} characters.` })
 
     setBusy('create')
     setNotice(null)
@@ -297,6 +299,13 @@ function App() {
         accept: (value) => value.agreement_id === id,
       })
       if (!confirmed) {
+        const rollback = await leaderRollbackReason(hash)
+        if (rollback) {
+          const message = `Transaction ${hash} rolled back: ${rollback}`
+          setTx({ phase: 'error', label: 'Create agreement rolled back', hash, message })
+          setNotice({ kind: 'error', title: 'Create rolled back', message })
+          return
+        }
         setTx({ phase: 'pending', label: 'Agreement submitted', hash, message: 'State confirmation timed out. The transaction may still be finalizing or may have reverted. Check Explorer before retrying.' })
         return
       }
@@ -321,9 +330,9 @@ function App() {
     if (!account || !agreement) return setNotice({ kind: 'warning', title: 'Agreement required', message: 'Connect MetaMask and load an agreement first.' })
     if (!isCreator) return setNotice({ kind: 'warning', title: 'Creator only', message: 'Only the agreement creator may submit commitments.' })
     if (agreement.bound) return setNotice({ kind: 'warning', title: 'Agreement frozen', message: 'BOUND agreements cannot accept more commitments.' })
-    const text = commitmentText.trim()
+    const text = pyStrip(commitmentText)
     if (!text) return setNotice({ kind: 'warning', title: 'Commitment required', message: 'Enter commitment text.' })
-    if (config && text.length > config.max_text_length) return setNotice({ kind: 'warning', title: 'Commitment too long', message: `Maximum ${config.max_text_length} characters.` })
+    if (config && pyLen(text) > config.max_text_length) return setNotice({ kind: 'warning', title: 'Commitment too long', message: `Maximum ${config.max_text_length} characters.` })
 
     setBusy('submit')
     setNotice(null)
@@ -349,6 +358,13 @@ function App() {
         accept: (value) => value.agreement.submitted_count > before && Boolean(value.commitment),
       })
       if (!confirmed?.commitment) {
+        const rollback = await leaderRollbackReason(hash)
+        if (rollback) {
+          const message = `Transaction ${hash} rolled back: ${rollback}`
+          setTx({ phase: 'error', label: 'Commitment rolled back', hash, message })
+          setNotice({ kind: 'error', title: 'Submission rolled back', message })
+          return
+        }
         setTx({ phase: 'pending', label: 'Commitment submitted', hash, message: 'Consensus/state confirmation timed out. Open Explorer before retrying; an exact retry may revert if the commitment was accepted.' })
         return
       }
@@ -386,6 +402,13 @@ function App() {
         accept: (value) => value.bound === true,
       })
       if (!confirmed) {
+        const rollback = await leaderRollbackReason(hash)
+        if (rollback) {
+          const message = `Transaction ${hash} rolled back: ${rollback}`
+          setTx({ phase: 'error', label: 'Bind rolled back', hash, message })
+          setNotice({ kind: 'error', title: 'Bind rolled back', message })
+          return
+        }
         setTx({ phase: 'pending', label: 'Bind submitted', hash, message: 'State confirmation timed out. Check Explorer before retrying.' })
         return
       }
@@ -500,8 +523,8 @@ function App() {
             <div className="workspace-grid">
               <div className="panel">
                 <div className="panel-title"><h3>Create isolated agreement</h3><span className="step">01</span></div>
-                <label>Agreement name <span>{name.length}/{config?.max_name_length ?? 80}</span></label>
-                <input value={name} onChange={(e) => setName(e.target.value)} maxLength={config?.max_name_length ?? 80} placeholder="Hosting SLA" />
+                <label>Agreement name <span>{pyLen(name)}/{config?.max_name_length ?? 80}</span></label>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Hosting SLA" />
                 <label>Promisee address</label>
                 <input value={promisee} onChange={(e) => setPromisee(e.target.value)} placeholder="0x… different from creator" />
                 <p className="hint">Only the creator signs the demo. Promisee is stored as context and must be a different valid address.</p>
@@ -551,8 +574,8 @@ function App() {
                   <button onClick={() => setCommitmentText(DEMO_VAGUE)}>Load vague demo</button>
                   <button onClick={() => setCommitmentText(DEMO_TESTABLE)}>Load testable demo</button>
                 </div>
-                <textarea value={commitmentText} onChange={(e) => setCommitmentText(e.target.value)} maxLength={config?.max_text_length ?? 1200} rows={7} />
-                <div className="textarea-meta"><span>{commitmentText.length}/{config?.max_text_length ?? 1200}</span><span>One semantic question · no URLs · no external evidence</span></div>
+                <textarea value={commitmentText} onChange={(e) => setCommitmentText(e.target.value)} rows={7} />
+                <div className="textarea-meta"><span>{pyLen(commitmentText)}/{config?.max_text_length ?? 1200}</span><span>One semantic question · no URLs · no external evidence</span></div>
                 <button className="button primary wide" disabled={Boolean(busy) || !agreement || !isCreator || Boolean(agreement?.bound)} onClick={submit}>{busy === 'submit' ? 'Consensus running…' : 'Submit to GenLayer'}</button>
                 {!agreement ? <p className="gate-reason">Load an agreement first.</p> : !isCreator ? <p className="gate-reason">Only the creator may submit.</p> : agreement.bound ? <p className="gate-reason">BOUND agreements are frozen.</p> : null}
               </div>
