@@ -30,6 +30,16 @@ import type { Address, AgreementState, AttemptItem, CommitmentState, ContractCon
 const DEMO_VAGUE = 'The operator will respond to incidents in the manner warranted by operational needs.'
 const DEMO_TESTABLE =
   'The operator must publish a post-incident report containing root cause, customer impact and corrective actions within five business days after incident closure.'
+const UNAUTHORIZED_PROBE_TEXT = 'Unauthorized wallet must not submit this commitment.'
+
+async function waitForRollback(hash: string, attempts = 36, intervalMs = 5000) {
+  for (let i = 0; i < attempts; i += 1) {
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    const reason = await leaderRollbackReason(hash)
+    if (reason) return reason
+  }
+  return undefined
+}
 
 const lastAgreementKey = (account: string) =>
   `commitgate:last:${CONTRACT_ADDRESS.toLowerCase()}:${account.toLowerCase()}`
@@ -79,6 +89,10 @@ function statusClass(value: string) {
 }
 
 function App() {
+  const verifyMode = useMemo(
+    () => new URLSearchParams(window.location.search).get('verify') === '1',
+    [],
+  )
   const [account, setAccount] = useState<Address | null>(null)
   const [wrongChain, setWrongChain] = useState(false)
   const [config, setConfig] = useState<ContractConfig | null>(null)
@@ -424,6 +438,65 @@ function App() {
     }
   }
 
+  const runUnauthorizedProbe = async (method: 'submit' | 'bind') => {
+    if (!account || !agreement) {
+      return setNotice({ kind: 'warning', title: 'Load the test agreement', message: 'Connect the non-creator wallet and load the existing agreement first.' })
+    }
+    if (isCreator) {
+      return setNotice({ kind: 'warning', title: 'Non-creator wallet required', message: 'Switch MetaMask to wallet B or C before running this guard probe.' })
+    }
+
+    const isSubmit = method === 'submit'
+    const expected = isSubmit
+      ? 'Only agreement creator may submit commitments'
+      : 'Only agreement creator may bind agreement'
+    const label = isSubmit ? 'Unauthorized submit probe' : 'Unauthorized bind probe'
+
+    setBusy(`verify-${method}`)
+    setNotice(null)
+    setTx({ phase: 'signing', label })
+
+    try {
+      const { hash } = isSubmit
+        ? await submitCommitment(account, agreement.agreement_id, UNAUTHORIZED_PROBE_TEXT)
+        : await bindAgreement(account, agreement.agreement_id)
+
+      setTx({
+        phase: 'submitted',
+        label,
+        hash,
+        message: 'Expected rollback submitted. Waiting for the finalized contract reason; do not retry.',
+      })
+
+      const rollback = await waitForRollback(hash)
+      if (!rollback) {
+        setTx({
+          phase: 'pending',
+          label,
+          hash,
+          message: 'Rollback confirmation timed out. Open Explorer and verify the execution result before retrying.',
+        })
+        setNotice({ kind: 'warning', title: 'Check Explorer', message: `The transaction was submitted, but the dApp could not read its finalized rollback reason yet. Expected: ${expected}.` })
+        return
+      }
+
+      const exactGuard = rollback.includes(expected)
+      const message = `Transaction ${hash} rolled back: ${rollback}`
+      setTx({ phase: 'error', label: exactGuard ? `${label} — expected rollback` : `${label} — unexpected rollback`, hash, message })
+      setNotice({
+        kind: exactGuard ? 'success' : 'error',
+        title: exactGuard ? 'Contract guard verified' : 'Unexpected rollback reason',
+        message,
+      })
+    } catch (error) {
+      const message = reportError(label.toLowerCase(), error)
+      setTx({ phase: 'error', label: `${label} failed`, message })
+      setNotice({ kind: 'error', title: 'Probe failed before submission', message })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -502,6 +575,35 @@ function App() {
               {tx.message ? <p>{tx.message}</p> : null}
             </div>
             {tx.hash ? <a href={explorerTx(tx.hash)} target="_blank" rel="noreferrer">View tx ↗</a> : null}
+          </section>
+        ) : null}
+
+        {verifyMode ? (
+          <section className="guard-verifier">
+            <div>
+              <span className="eyebrow">RUNTIME VERIFICATION</span>
+              <h2>Non-creator contract guards</h2>
+              <p>This hidden test mode deliberately submits transactions that must roll back. It never bypasses or changes contract state.</p>
+              {account && agreement && !isCreator
+                ? <p className="verify-ready">Ready: {short(account)} is not the creator of {short(agreement.agreement_id, 10, 8)}.</p>
+                : <p className="gate-reason">Connect wallet B or C and load the existing agreement before running either probe.</p>}
+            </div>
+            <div className="verify-actions">
+              <button
+                className="button secondary"
+                disabled={Boolean(busy) || wrongChain || !account || !agreement || isCreator}
+                onClick={() => void runUnauthorizedProbe('submit')}
+              >
+                {busy === 'verify-submit' ? 'Waiting for rollback…' : 'Test unauthorized submit'}
+              </button>
+              <button
+                className="button secondary"
+                disabled={Boolean(busy) || wrongChain || !account || !agreement || isCreator}
+                onClick={() => void runUnauthorizedProbe('bind')}
+              >
+                {busy === 'verify-bind' ? 'Waiting for rollback…' : 'Test unauthorized bind'}
+              </button>
+            </div>
           </section>
         ) : null}
 
