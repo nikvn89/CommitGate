@@ -30,6 +30,11 @@ The project is designed for a short reviewer flow and needs only **one signing w
 
 The frontend never invents a verdict. It only submits input, reads authoritative contract state, and renders the result.
 
+For reviewer-only role-guard evidence, append `?verify=1` to the live URL. After a
+non-creator wallet loads an existing agreement, two explicit probe buttons submit the
+real unauthorized calls and display the finalized contract rollback reason and Explorer
+link. The normal URL does not show this verification panel.
+
 ## Project contract
 
 ```text
@@ -163,6 +168,13 @@ CommitGate/
 │  └─ rpc.js
 ├─ contract/
 │  └─ CommitmentTestability.py
+├─ evidence/
+│  ├─ 01-semantic-history.png
+│  ├─ 02-exact-replay-blocked.png
+│  ├─ 03-bound-state.png
+│  ├─ 04-bind-explorer.png
+│  ├─ 05-unauthorized-submit.png
+│  └─ 06-unauthorized-bind.png
 ├─ public/
 │  ├─ commitgate-logo.png
 │  ├─ genlayer-logo.png
@@ -246,12 +258,12 @@ Output Directory: dist
 
 ## Testing status
 
-The **local frontend integration against the current StudioNet project deployment has been runtime-tested** with the project contract above.
+The final Vercel frontend against the current StudioNet project deployment has been runtime-tested with the project contract above.
 
 Observed local flow:
 
 ```text
-Create Hosting SLA agreement
+Create Final Review 0919 agreement
 -> OPEN / TESTABLE 0 / SUBMITTED 0 / BOUND NO
 
 Vague commitment
@@ -275,8 +287,10 @@ The RLP regression was also isolated with the included Studio probe: the oversiz
 corresponding `submit_commitment` write path remained valid. The frontend now computes
 content-addressed IDs locally and no longer issues that oversized read.
 
-**Vercel has not yet been tested in this final build.** Do not claim live/Vercel PASS until
-the same short flow is observed after deployment.
+The final live run also verified exact-replay blocking and both non-creator role guards.
+Direct Explorer hashes and screenshots are recorded in `RUNTIME_EVIDENCE.md`; the
+unauthorized calls finalized with the exact expected contract rollback reasons and left
+the accepted `BOUND / 1 TESTABLE / 2 SUBMITTED` state unchanged.
 
 See [`TESTING.md`](./TESTING.md).
 
@@ -318,7 +332,7 @@ The final Vercel deployment was tested end-to-end against the StudioNet contract
 Observed live flow:
 
 ```text
-Create "Vercel SLA"
+Create "Final Review 0919"
 -> OPEN
 -> TESTABLE 0
 -> SUBMITTED 0

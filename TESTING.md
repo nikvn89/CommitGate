@@ -202,8 +202,17 @@ Coverage includes ASCII, emoji outside the BMP, extended Han outside the BMP,
 `U+001F`, `U+0085`, `U+FEFF`, `U+001C`/`U+001E`, and the fixed real-data vector.
 
 The extended unsigned `eth_estimateGas` probe for 200/300/400/600-character
-`submit_commitment` inputs is included in `tools/probe-studio.mjs`. Its runtime table is
-not recorded here because that network probe still must be run and captured by the user.
+`submit_commitment` inputs is included in `tools/probe-studio.mjs`. It was run against
+StudioNet with Wallet A as the caller and returned:
+
+| Text characters | Serialized payload | `eth_estimateGas` |
+|---:|---:|---|
+| 200 | 308 bytes | `OK 0x7a120` |
+| 300 | 408 bytes | `OK 0x7a120` |
+| 400 | 508 bytes | `OK 0x7a120` |
+| 600 | 708 bytes | `OK 0x7a120` |
+
+**Status: PASS — EXTENDED WRITE BOUNDARY**
 
 ---
 
@@ -218,14 +227,15 @@ not recorded here because that network probe still must be run and captured by t
 | Append-only history shows both verdicts | PASS — LOCAL |
 | Bind after TESTABLE -> BOUND | PASS — LOCAL |
 | RLP regression no longer blocks positive submit | PASS — LOCAL |
-| Exact replay through final UI | NOT RUN |
-| Wallet C unauthorized submit/bind | NOT RUN |
+| Exact replay through final UI | PASS — duplicate preflight, no state change |
+| Wallet C unauthorized submit | PASS — on-chain expected rollback |
+| Wallet C unauthorized bind | PASS — on-chain expected rollback |
 | Wrong-chain switch UX in final build | NOT RUN |
 | Account-change listener in final build | NOT RUN |
-| Disconnect button / permission revoke | TO RUN ON USER PC |
-| Final `npm run build` after footer-only polish | TO RUN ON USER PC |
-| Vercel `/api/rpc` | NOT RUN |
-| Full Vercel flow | NOT RUN |
+| Disconnect button / local session clear | IMPLEMENTED — provider revoke not separately captured |
+| Final `npm run build` | PASS |
+| Vercel `/api/rpc` reads | PASS — live accepted-state reads |
+| Full Vercel flow | PASS |
 
 ---
 
@@ -251,7 +261,7 @@ It does **not** prove:
 - every natural-language commitment will converge identically;
 - a TESTABLE commitment is fair or legally valid;
 - any commitment was actually performed;
-- the final Vercel deployment works before it is separately tested.
+- any future deployment works before it is separately tested.
 
 # Final Vercel runtime evidence
 
@@ -273,12 +283,19 @@ Contract:
 0xe8999d51e91B8b7Ee82CeF530B1620236B84828F
 ```
 
+Runtime specimen:
+
+```text
+name = Final Review 0919
+agreement_id = dfba97c31a292339208b243a44fa623e06750ed9c8f96807fef44460df45df19
+```
+
 ## V1 — Create agreement on Vercel
 
 Observed agreement:
 
 ```text
-name = Vercel SLA
+name = Final Review 0919
 state = OPEN
 TESTABLE = 0
 SUBMITTED = 0
@@ -337,18 +354,71 @@ Agreement is BOUND
 
 **Status: PASS — VERCEL**
 
+Explorer transaction:
+
+```text
+https://explorer-studio.genlayer.com/tx/0x625c62cf71918ae68a8c73f161ab7870b665783f99387b06d37db36b89a0a268
+```
+
+## V5 — Exact replay guard
+
+The byte-identical positive commitment was submitted again through the final UI. The
+frontend recomputed the content-derived commitment ID, found the existing on-chain
+record and stopped the duplicate before wallet signing:
+
+```text
+This exact commitment already exists. Exact-text re-rolls are blocked by the contract.
+```
+
+The attempt history stayed at two records and the counters stayed `1/2`.
+
+**Status: PASS — FINAL UI / NO DUPLICATE WRITE**
+
+## V6 — Unauthorized submit through the final dApp
+
+Verification URL:
+
+```text
+https://commit-gate.vercel.app/?verify=1
+```
+
+Wallet C submitted the real `submit_commitment` call against the loaded agreement.
+
+```text
+tx = 0xf2563dbc432588d56e15be9070a943c23dffd583b7f40136ca91fcaf8218e626
+rollback = Only agreement creator may submit commitments
+```
+
+After finalization, the accepted state remained `BOUND`, TESTABLE `1`, SUBMITTED `2`.
+
+**Status: PASS — EXPECTED ON-CHAIN ROLLBACK**
+
+## V7 — Unauthorized bind through the final dApp
+
+Wallet C submitted the real `bind_agreement` call against the same agreement.
+
+```text
+tx = 0xc2bda4f67e42a2076e9628fbbe6d4f697335e7be1b9686f86aa17f1b9249abee
+rollback = Only agreement creator may bind agreement
+```
+
+After finalization, the accepted state remained `BOUND`, TESTABLE `1`, SUBMITTED `2`.
+
+**Status: PASS — EXPECTED ON-CHAIN ROLLBACK**
+
 ## Final project result
 
 ```text
 Local frontend core flow: PASS
 RLP regression fix: PASS
 Vercel core flow: PASS
+Exact replay protection: PASS
+Non-creator role guards: PASS
 ```
 
 Not claimed as PASS without separate runtime evidence:
 
 ```text
-provider-side Disconnect permission revoke
-Wallet C unauthorized submit/bind regression
 additional wrong-chain rejection edge cases
+provider implementations that do not support permission revocation
 ```
